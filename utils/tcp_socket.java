@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 
-public class tcp_socket {
+public class tcp_socket extends abstract_socket {
     private Socket socket;
     private InetAddress address;
     private int port;

@@ -5,7 +5,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 
-public class udp_socket {
+public class udp_socket extends abstract_socket {
     private DatagramSocket socket;
     private InetAddress address;
     private int port;
