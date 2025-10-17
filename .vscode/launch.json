@@ -6,6 +6,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "CalculationServer",
+            "request": "launch",
+            "mainClass": "CalculationServer",
+            "projectName": "verteilte_systeme_5ae5ebf7"
+        },
+        {
+            "type": "java",
             "name": "EchoServer",
             "request": "launch",
             "mainClass": "EchoServer",
