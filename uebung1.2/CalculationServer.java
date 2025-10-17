@@ -5,17 +5,18 @@ import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 
-import utils.udp_socket;
+import utils.tcp_socket;
 
 public class CalculationServer {
     public static void main(String[] args) {
+        System.out.println("Calculation Client started.");
         String hostname = "vs.lxd-vs.uni-ulm.de";
         int port = 5678;
         String message = "Please provide a new expression!\n";
 
         try {
-            // Create a UDP socket
-            udp_socket socket = new udp_socket(hostname, port);
+            // Create a TCP socket
+            tcp_socket socket = new tcp_socket(hostname, port);
             socket.setSoTimeout(2000);
 
             // Prepare the outgoing message
