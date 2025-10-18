@@ -63,9 +63,6 @@ public class CalculationServer {
         for (String part : sumParts) {
             // Each part can be a chain of multiplications
             String[] factors = part.split("\\*");
-            for (String s : factors) {
-                System.out.println("Factor: " + s);
-            }
 
             int product = 1;
             for (String f : factors) {
