@@ -13,6 +13,6 @@ public class Echo_Client {
 
                 break;
         }
-        sender.echo();
+        sender.echo(arguments.msg);
     }
 }

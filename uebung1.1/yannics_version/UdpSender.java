@@ -10,20 +10,21 @@ import java.nio.charset.StandardCharsets;
 
 public class UdpSender extends AbstractSender {
     public UdpSender(Args args) {
-        this.arguments = args;
+        this.host = args.host;
+        this.port = args.port;
     }
 
-    public void echo() {
+    public void echo(String msg) {
         try {
-            InetAddress addr = InetAddress.getByName(this.arguments.host);
-            byte[] data = this.arguments.msg.getBytes(StandardCharsets.UTF_8);
+            InetAddress addr = InetAddress.getByName(this.host);
+            byte[] data = msg.getBytes(StandardCharsets.UTF_8);
 
             try (DatagramSocket socket = new DatagramSocket()) {
                 socket.setSoTimeout(5000);
 
-                DatagramPacket send = new DatagramPacket(data, data.length, addr, this.arguments.port);
+                DatagramPacket send = new DatagramPacket(data, data.length, addr, this.port);
                 socket.send(send);
-                System.out.printf("Sent via UDP: %s%n", this.arguments.msg);
+                System.out.printf("Sent via UDP: %s%n", msg);
 
                 byte[] buf = new byte[8192];
                 DatagramPacket recv = new DatagramPacket(buf, buf.length);
@@ -38,9 +39,9 @@ public class UdpSender extends AbstractSender {
                 }
             }
         } catch (UnknownHostException e) {
-            abort("Unknown host: " + this.arguments.host, e);
+            abort("Unknown host: " + this.host, e);
         } catch (PortUnreachableException e) {
-            abort("Port unreachable at " + this.arguments.host + ":" + this.arguments.port, e);
+            abort("Port unreachable at " + this.host + ":" + this.port, e);
         } catch (BindException e) {
             abort("Failed to bind local UDP socket (address/port in use?).", e);
         } catch (SecurityException e) {
