@@ -6,6 +6,14 @@
     "configurations": [
         {
             "type": "java",
+            "name": "Echo_Client",
+            "request": "launch",
+            "mainClass": "Echo_Client",
+            "projectName": "verteilte_systeme_5ae5ebf7",
+            "args": ["vs.lxd-vs.uni-ulm.de", "3211","udp"]
+        },
+        {
+            "type": "java",
             "name": "CalculationServer",
             "request": "launch",
             "mainClass": "CalculationServer",
