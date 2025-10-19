@@ -1,7 +1,3 @@
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -106,9 +102,6 @@ public class CalculationServer {
         for (String part : sumParts) {
             // Each part can be a chain of multiplications
             String[] factors = part.split("\\*");
-            for (String s : factors) {
-                System.out.println("Factor: " + s);
-            }
 
             int product = 1;
             for (String f : factors) {
