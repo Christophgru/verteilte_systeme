@@ -1,3 +1,5 @@
+package src;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.InputStreamReader;
@@ -30,7 +32,8 @@ public class TcpSender extends AbstractSender {
 
             System.out.printf("Sent via TCP: %s%n", msg);
 
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             String line;
             while ((line = in.readLine()) != null) {
                 System.out.println("SERVER: " + line);

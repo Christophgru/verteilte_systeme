@@ -7,8 +7,6 @@ import java.net.SocketTimeoutException;
 
 public class udp_socket extends abstract_socket {
     private DatagramSocket socket;
-    private InetAddress address;
-    private int port;
 
     public udp_socket(String hostname, int port) throws Exception {
         this.address = InetAddress.getByName(hostname);
@@ -38,7 +36,7 @@ public class udp_socket extends abstract_socket {
         socket.close();
     }
 
-    public void setSoTimeout(int timeout) throws Exception {
+    public void setTimeout(int timeout) throws Exception {
         socket.setSoTimeout(timeout);
     }
 }

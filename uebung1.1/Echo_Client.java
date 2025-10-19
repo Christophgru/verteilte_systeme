@@ -1,3 +1,8 @@
+import src.AbstractSender;
+import src.Args;
+import src.TcpSender;
+import src.UdpSender;
+
 public class Echo_Client {
     public static void main(String[] args) throws Exception {
         Args arguments = new Args(args);
@@ -7,7 +12,7 @@ public class Echo_Client {
                 sender = new TcpSender(arguments);
 
                 break;
-        
+
             case UDP:
                 sender = new UdpSender(arguments);
 

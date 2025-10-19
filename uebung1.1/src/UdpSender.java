@@ -1,3 +1,5 @@
+package src;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -31,8 +33,7 @@ public class UdpSender extends AbstractSender {
                 try {
                     socket.receive(recv);
                     String resp = new String(
-                        recv.getData(), recv.getOffset(), recv.getLength(), StandardCharsets.UTF_8
-                    );
+                            recv.getData(), recv.getOffset(), recv.getLength(), StandardCharsets.UTF_8);
                     System.out.println("SERVER: " + resp);
                 } catch (SocketTimeoutException e) {
                     abort("Timeout while waiting for response.", e);

@@ -7,8 +7,6 @@ import java.net.SocketTimeoutException;
 
 public class tcp_socket extends abstract_socket {
     private Socket socket;
-    private InetAddress address;
-    private int port;
 
     public tcp_socket(String hostname, int port) throws Exception {
         this.address = InetAddress.getByName(hostname);
@@ -40,7 +38,7 @@ public class tcp_socket extends abstract_socket {
         }
     }
 
-    public void setSoTimeout(int timeout) throws Exception {
+    public void setTimeout(int timeout) throws Exception {
         socket.setSoTimeout(timeout);
     }
 }

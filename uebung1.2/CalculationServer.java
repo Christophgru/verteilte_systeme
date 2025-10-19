@@ -21,7 +21,7 @@ public class CalculationServer {
                 socket = new udp_socket(hostname, port); // Placeholder for UDP socket
             }
         } catch (Exception e) {
-            // TODO: handle exception
+            e.printStackTrace();
             return;
         }
         int success_counter = 0;
@@ -38,7 +38,6 @@ public class CalculationServer {
                 }
             }
         } catch (Exception e1) {
-            // TODO Auto-generated catch block
             socket.close();
             e1.printStackTrace();
         }
@@ -57,7 +56,7 @@ public class CalculationServer {
         try {
             String message = "Please provide a new expression!\n";
 
-            socket.setSoTimeout(2000);
+            socket.setTimeout(2000);
             socket.send(message);
             System.out.println("Message sent to " + socket + " on port " + message);
 
