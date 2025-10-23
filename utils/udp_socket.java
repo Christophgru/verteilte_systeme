@@ -12,16 +12,20 @@ public class udp_socket extends abstract_socket {
         this.address = InetAddress.getByName(hostname);
         this.port = port;
         this.socket = new DatagramSocket();
+        isConnected = true;
     }
 
     public void send(String message) throws Exception {
+        isBusy = true;
         byte[] buffer = message.getBytes();
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
         socket.send(packet);
+        isBusy = false;
     }
 
     // receive until sotimeout triggered
     public String receive() throws Exception {
+        isBusy = true;
         byte[] receiveBuffer = new byte[1024];
         DatagramPacket response = new DatagramPacket(receiveBuffer, receiveBuffer.length);
         try {
@@ -29,11 +33,13 @@ public class udp_socket extends abstract_socket {
         } catch (SocketTimeoutException e) {
             System.out.println("Socket timed out waiting for a response");
         }
+        isBusy = false;
         return new String(response.getData(), 0, response.getLength());
     }
 
     public void close() {
         socket.close();
+        isConnected = false;
     }
 
     public void setTimeout(int timeout) throws Exception {
