@@ -6,7 +6,7 @@ import com.example.zmq.net.JeromqReqSocket;
 
 //compile from jeromq-echo using 
 //mvn -q -DskipTests package
-//run: java -cp target/jeromq-echo-1.0-SNAPSHOT-shaded.jar com.example.zmq.EchoClient
+//run: java -cp target/jeromq-echo-1.0-SNAPSHOT-shaded.jar com.example.zmq.NumberGuesser
 enum resultType {
     TOO_SMALL,
     TOO_LARGE,
@@ -34,28 +34,50 @@ public class NumberGuesser {
             gameId = Long.parseLong(id_string);
             System.out.println("The gameID is: " + gameId);
             resultType result = resultType.UNKNOWN;
+            long attempts_too_small = 0;
+            long attempts_too_large = 0;
             while (result != resultType.CORRECT) {
-                reply = sendGuess(sock, String.valueOf(gameId), String.valueOf(guess), timeoutMs);
                 reply = sendGuess(sock, String.valueOf(gameId), String.valueOf(guess), timeoutMs);
 
                 result = evaluateReply(reply);
-                if (result == resultType.CORRECT) {
+                if (result == resultType.CORRECT &&attempts_too_large == 0 && attempts_too_small == 0) {
                     System.out.println("Guessed the number on the first try!");
                     return;
                 }
-                if (result == resultType.TOO_SMALL) {
-                    long old_guess = guess;
-                    guess = guess + stepsize + 1;
-                    stepsize = stepsize / 2;
-                    System.out.println("Adjusting guess from " + old_guess + " to " + guess);
-                } else if (result == resultType.TOO_LARGE) {
-                    long old_guess = guess;
-                    guess = guess - stepsize + 1;
-                    stepsize = stepsize / 2;
-                    System.out.println("Adjusting guess from " + old_guess + " to " + guess);
-                } else {
+                if (null == result) {
                     System.out.println("Received unknown result, exiting.");
                     return;
+                } else switch (result) {
+                    case TOO_SMALL ->                         {
+                            long old_guess = guess;
+                            guess = guess + stepsize + 1;
+                            attempts_too_small += 1;
+                            stepsize = stepsize / 2;
+                                 
+                            System.out.println("Adjusting guess from " + old_guess + " to " + guess);
+                            if(attempts_too_small > 70){
+                                // increase stepsize again
+                                guess=(long) Math.pow(2, 63);
+                                stepsize = (long) Math.pow(2, 62);
+                            }  
+                        }
+                    case TOO_LARGE ->                         {
+                            long old_guess = guess;
+                            guess = guess - stepsize + 1;
+                            stepsize = stepsize / 2;
+                            attempts_too_large += 1;
+                            
+                            System.out.println("Adjusting guess from " + old_guess + " to " + guess);
+                             if(attempts_too_large > 70){
+                                // increase stepsize again
+                                guess = (long) Math.pow(2, 63);
+                                stepsize = (long) Math.pow(2, 62);
+                            }
+                        }
+                    default -> {
+                        System.out.println("Received unknown result, exiting.");
+                        return;
+                    }
                 }
 
             }
