@@ -9,7 +9,6 @@ import org.zeromq.ZMQ;
  * Connects on construction. Not thread-safe (REQ must strictly send→recv).
  */
 public final class JeromqReqSocket implements AutoCloseable {
-    private final ZContext ctx;
     private final ZMQ.Socket req;
 
     /**
@@ -18,8 +17,7 @@ public final class JeromqReqSocket implements AutoCloseable {
      * @param endpoint       tcp://host:port to connect to (e.g., tcp://127.0.0.1:5555)
      * @param recvTimeoutMs  how long to wait for replies (0 = block forever; >0 = ms)
      */
-    public JeromqReqSocket(String endpoint, int recvTimeoutMs) {
-        this.ctx = new ZContext();
+    public JeromqReqSocket(ZContext ctx, String endpoint, int recvTimeoutMs) {
         this.req = ctx.createSocket(SocketType.REQ);
         // quick shutdowns; don’t hang on close
         this.req.setLinger(0);
@@ -47,10 +45,6 @@ public final class JeromqReqSocket implements AutoCloseable {
 
     @Override
     public void close() {
-        try {
-            if (req != null) req.close();
-        } finally {
-            if (ctx != null) ctx.close();
-        }
+        if (req != null) req.close();
     }
 }

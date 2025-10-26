@@ -1,5 +1,5 @@
 package com.example.zmq;
-
+import org.zeromq.ZContext;
 import java.util.Arrays;
 
 import com.example.zmq.net.JeromqReqSocket;
@@ -17,13 +17,15 @@ enum resultType {
 public class NumberGuesser {
     // Usage: EchoClient tcp://host:port "your message"
     public static void main(String[] args) {
+        // Setup ZeroMQ context and REQ socket
+        ZContext ctx = new ZContext();
         String endpoint = "tcp://vs.lxd-vs.uni-ulm.de:27401";
         long gameId = 0;
         long guess = (long) Math.pow(2, 63);
         long stepsize = (long) Math.pow(2, 62);
         int timeoutMs = 1000;
         String reply;
-        try (JeromqReqSocket sock = new JeromqReqSocket(endpoint, timeoutMs)) {
+        try (JeromqReqSocket sock = new JeromqReqSocket(ctx,endpoint, timeoutMs)) {
             reply = sock.request(String.format("%s:%s", String.valueOf(gameId), String.valueOf(guess)));
             // get a int number from the answer "GameID unknown! The current gameID is
             // 3736278849413228172"
@@ -84,6 +86,7 @@ public class NumberGuesser {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    ctx.close();
 
     }
 
