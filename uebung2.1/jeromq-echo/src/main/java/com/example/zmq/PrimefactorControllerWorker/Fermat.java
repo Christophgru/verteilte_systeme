@@ -1,4 +1,5 @@
 package com.example.zmq.PrimefactorControllerWorker;
+
 import java.math.BigInteger;
 
 public class Fermat {
