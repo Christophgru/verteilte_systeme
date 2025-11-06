@@ -1,29 +1,31 @@
 package com.rmi_example.aufgabe1;
+
 import java.rmi.RemoteException;
-public class RMIClient implements RemoteKVStore {
-    RMIKVStore store = null;
-    RMIClient(String ip, int port) throws RemoteException {
-        // get RMI Registry
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+
+public class RMIClient {
+    private final RemoteKVStore remote;
+
+    public RMIClient(String host, int port) throws RemoteException {
         try {
-            store = new RMIKVStore(ip, port);
-        } catch (RemoteException e) {
-            e.printStackTrace();    
+            Registry reg = LocateRegistry.getRegistry(host, port);
+            String name = RMIKVStore.class.getName();
+            this.remote = (RemoteKVStore) reg.lookup(name);
+        } catch (Exception e) {
+            throw new RemoteException("Lookup failed", e);
         }
-
     }
-    @Override
+
     public String readRemote(String key) throws RemoteException {
-        return store.readRemote(key);
+        return remote.readRemote(key);
     }
 
-    @Override
     public void writeRemote(String key, String value) throws RemoteException {
-        store.writeRemote(key, value);
+        remote.writeRemote(key, value);
     }
 
-    @Override
     public void removeRemote(String key) throws RemoteException {
-        store.removeRemote(key);
+        remote.removeRemote(key);
     }
-    
 }

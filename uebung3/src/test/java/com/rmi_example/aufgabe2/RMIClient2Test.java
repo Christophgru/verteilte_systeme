@@ -1,7 +1,9 @@
 package com.rmi_example.aufgabe2;
 
 import junit.framework.TestCase;
-
+//mvn test
+//or for just this file use
+//mvn -Dtest=RMIClient2Test test
 public class RMIClient2Test extends TestCase {
 
     public void testAufgabe2() throws Exception {
