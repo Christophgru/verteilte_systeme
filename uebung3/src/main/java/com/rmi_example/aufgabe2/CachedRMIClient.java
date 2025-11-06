@@ -29,14 +29,14 @@ public class CachedRMIClient implements Subscriber  {
         if (cache.containsKey(key)) {
             return cache.get(key);
         } else {
-            String value = store.readRemote(key);
+            String value = store.readRemote(key, this);
             cache.put(key, value);
             return value;
         }
     }
     public void write(String key, String value) throws RemoteException {
         cache.put(key, value);
-        store.writeRemote(key, value);
+        store.writeRemote(key, value, this);
     }
     public void remove(String key) throws RemoteException {
         cache.remove(key);
