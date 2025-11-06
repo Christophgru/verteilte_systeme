@@ -6,11 +6,11 @@ public class RMIClient2Test extends TestCase {
 
     public void testAufgabe2() throws Exception {
         // The first client will create/bind the store if it doesn't exist.
-        CachedRMIClient client1 = new CachedRMIClient("localhost", 1099, "KVStore");
-        CachedRMIClient client2 = new CachedRMIClient("localhost", 1099, "KVStore");
+        CachedRMIClient client1 = new CachedRMIClient("localhost", 1099);
+        CachedRMIClient client2 = new CachedRMIClient("localhost", 1099);
 
         // Write initial value directly through the store (via get-or-create)
-        RemoteKVStore store = SubRMIKVStore.getOrCreate("localhost", 1099, "KVStore");
+        RemoteKVStore store = SubRMIKVStore.getOrCreate("localhost", 1099);
         store.writeRemote("key0", "initialValue", null);
 
         // Both clients should see it

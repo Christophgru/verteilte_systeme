@@ -9,9 +9,9 @@ public class CachedRMIClient implements Subscriber {
     private final RemoteKVStore store;
     private final Map<String, String> cache = new ConcurrentHashMap<>();
 
-    public CachedRMIClient(String host, int port, String name) throws Exception {
+    public CachedRMIClient(String host, int port) throws Exception {
         // Ensure the server exists (lookup or create + bind)
-        this.store = SubRMIKVStore.getOrCreate(host, port, name);
+        this.store = SubRMIKVStore.getOrCreate(host, port);
 
         // Export this client so server can callback updateEntry/removeEntry
         UnicastRemoteObject.exportObject(this, 0);

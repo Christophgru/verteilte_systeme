@@ -19,12 +19,12 @@ public class SubRMIKVStore extends UnicastRemoteObject implements RemoteKVStore 
         super(0);
     }
 
-    /* ---------------- get-or-create helper ---------------- */
-
-    public static RemoteKVStore getOrCreate(String host, int port, String name) throws RemoteException {
+    // Static factory method to get or create a RemoteKVStore instance, kindof singleton per (host, port, name),
+    // but not in java runtime only with regards to RMI registry
+    public static RemoteKVStore getOrCreate(String host, int port) throws RemoteException {
         try {
             Registry reg = safeGetOrCreateRegistry(host, port);
-
+            String name =  SubRMIKVStore.class.getName();
             // Try to reuse existing binding
             try {
                 return (RemoteKVStore) reg.lookup(name);
@@ -41,7 +41,7 @@ public class SubRMIKVStore extends UnicastRemoteObject implements RemoteKVStore 
             throw new RemoteException("Failed to get or create RemoteKVStore", e);
         }
     }
-
+    //get registry
     private static Registry safeGetOrCreateRegistry(String host, int port) throws RemoteException {
         Registry reg;
         try {
