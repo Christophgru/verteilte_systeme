@@ -8,6 +8,7 @@ public class RMIKVStore implements RemoteKVStore {
         try {
             java.rmi.registry.LocateRegistry.createRegistry(port);
         } catch (RemoteException e) {
+            System.out.println(e.getMessage());
             System.out.println("RMI Registry probably already exists.");
         }
 

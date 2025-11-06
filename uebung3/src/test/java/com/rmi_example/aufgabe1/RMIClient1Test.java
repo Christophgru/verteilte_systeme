@@ -2,7 +2,7 @@ package com.rmi_example.aufgabe1;
 
 import junit.framework.TestCase;
 import java.rmi.RemoteException;
-
+//mvn -Dtest=RMIClient1Test test
 public class RMIClient1Test extends TestCase {
 
     /**
@@ -70,12 +70,14 @@ public class RMIClient1Test extends TestCase {
 
         //write over store object
         try {
+            //I expect this to result in the client reading "value2" afterwards
             store.writeRemote("key2", "value2");
             System.out.println("Wrote key2:value2 over store object");
             String result = client.readRemote("key2");
+            //right now it reads null
             assertEquals("value2", result);
             System.out.println("Read key2 after writing over store object:"+result);
-        } catch (RemoteException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }

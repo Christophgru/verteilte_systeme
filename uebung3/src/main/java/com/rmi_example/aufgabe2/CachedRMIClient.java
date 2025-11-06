@@ -1,15 +1,22 @@
 package com.rmi_example.aufgabe2;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 public class CachedRMIClient implements Subscriber  {
     SubRMIKVStore store = null;
     HashMap<String, String> cache = new HashMap<>();
     CachedRMIClient(String ip, int port) throws RemoteException {
         // get RMI Registry
-        try {
-            store = new SubRMIKVStore(ip, port);
-        } catch (RemoteException e) {
-            e.printStackTrace();    
+       try {
+            // export 'this' so server can call back
+            UnicastRemoteObject.exportObject(this, 0);
+
+            Registry registry = LocateRegistry.getRegistry(ip, port);
+            this.store = (SubRMIKVStore) registry.lookup("KVStore");
+        } catch (Exception e) {
+            throw new RemoteException("Failed to connect/lookup KVStore", e);
         }
 
     }

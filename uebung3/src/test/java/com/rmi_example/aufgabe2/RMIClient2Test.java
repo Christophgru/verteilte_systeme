@@ -4,7 +4,7 @@ import junit.framework.TestCase;
 import java.rmi.RemoteException;
 import java.rmi.registry.Registry;
 
-
+//mvn -Dtest=RMIClient2Test test
 public class RMIClient2Test extends TestCase {
 
     public void testAufgabe2() {
