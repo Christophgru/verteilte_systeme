@@ -1,6 +1,9 @@
 package com.rmi_example.aufgabe2;
 
-public interface Subscriber extends java.rmi.Remote {
-    void updateEntry(String key, String value);
-    void removeEntry(String key);
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface Subscriber extends Remote {
+    void updateEntry(String key, String value) throws RemoteException;
+    void removeEntry(String key) throws RemoteException;
 }
