@@ -8,14 +8,15 @@ import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
 
 public class ChatServer {
+    // username -> sessionID
     private final static ConcurrentHashMap<String, String> users = new ConcurrentHashMap<>();
+    // sessionID -> response observer for that client's chat stream
+    private final static ConcurrentHashMap<String, StreamObserver<ChatMessages>> sessions = new ConcurrentHashMap<>();
     private Server server;
 
     public static class ChatService extends ChatGrpc.ChatImplBase {
         @Override
         public void login(LoginRequest request, StreamObserver<LoginResponse> responseObserver) {
-            // TODO if username is not taken return OK with random session token
-            // otherwise return FAILED
             String username = request.getUsername();
             if (users.containsKey(username)) {
                 LoginResponse response = LoginResponse.newBuilder()
@@ -32,14 +33,12 @@ public class ChatServer {
                         .build();
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
-                // store username and session token
                 System.out.println("User " + username + " logged in with session token " + sessionToken);
             }
         }
 
         @Override
         public void logout(LogoutRequest request, StreamObserver<LogoutResponse> responseObserver) {
-            // TODO
             String username = request.getUsername();
             String sessionToken = request.getSessionID();
             if (users.containsKey(username) && users.get(username).equals(sessionToken)) {
@@ -59,13 +58,62 @@ public class ChatServer {
             }
         }
 
+        @Override
+        public StreamObserver<ClientMessages> chatStream(StreamObserver<ChatMessages> responseObserver) {
+            // Called once for every new client connection
+            return new StreamObserver<ClientMessages>() {
+
+                String currentSessionId = null;
+
+                @Override
+                public void onNext(ClientMessages value) {
+                    // First message: only register this client's session, do not broadcast yet
+                    if (currentSessionId == null) {
+                        currentSessionId = value.getSessionID();
+                        sessions.put(currentSessionId, responseObserver);
+                        System.out.println("New ChatStream for Session: " + currentSessionId);
+                        return;
+                    }
+
+                    String msg = value.getMessage();
+                    System.out.println("[" + currentSessionId + "] says: " + msg);
+
+                    // Broadcast to all connected chat sessions
+                    ChatMessages broadcastMsg = ChatMessages.newBuilder()
+                            .setStatus(StatusCode.OK)
+                            .setMessage("[" + currentSessionId + "]: " + msg)
+                            .build();
+
+                    for (StreamObserver<ChatMessages> obs : sessions.values()) {
+                        // Send the message to each client's stream
+                        obs.onNext(broadcastMsg);
+                    }
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                    System.err.println("Error in stream of session: " + currentSessionId + ": " + t.getMessage());
+                    if (currentSessionId != null) {
+                        sessions.remove(currentSessionId);
+                    }
+                }
+
+                @Override
+                public void onCompleted() {
+                    System.out.println("Stream of session: " + currentSessionId + " ended.");
+                    if (currentSessionId != null) {
+                        sessions.remove(currentSessionId);
+                    }
+                    responseObserver.onCompleted();
+                }
+            };
+        }
+
     }
 
     public static void main(String[] args) {
-
         ChatServer server = new ChatServer();
         server.startServerAsync(5555);
-        // sleep 20 seconds to keep server alive for testing
         try {
             Thread.sleep(20000);
         } catch (InterruptedException e) {
@@ -75,24 +123,21 @@ public class ChatServer {
     }
 
     public void stopServer() {
-        // This method can be implemented to stop the server gracefully if needed
-        server.shutdown();
+        if (server != null) {
+            server.shutdown();
+        }
     }
 
     public void startServerAsync(int port) {
         System.out.println("Starting Chat Server...");
         try {
-            // Create and start the server
             server = ServerBuilder.forPort(port)
                     .addService(new ChatService())
                     .build()
                     .start();
 
-            // Add a hook to shut the server down if the program is terminated
             Runtime.getRuntime().addShutdownHook(new Thread(server::shutdown));
 
-            // Wait for the server to terminate
-            // satrt thread to not block main thread
             new Thread(() -> {
                 try {
                     server.awaitTermination();
@@ -107,5 +152,11 @@ public class ChatServer {
 
     public int getConnectedUsersCount() {
         return users.size();
-        }
+    }
+
+    // NEW: helper for tests so static state does not leak between tests
+    public static void resetState() {
+        users.clear();
+        sessions.clear();
+    }
 }

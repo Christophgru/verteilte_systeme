@@ -7,7 +7,8 @@ service Chat {
   rpc login (LoginRequest) returns (LoginResponse) {}
   rpc logout (LogoutRequest) returns (LogoutResponse) {}
 
-  /* TODO */
+  rpc chatStream (stream ClientMessages) returns (stream ChatMessages) {}
+  rpc listUsers (GetUsersMessage) returns (UserInfoMessage) {}
 }
 
 enum StatusCode {
@@ -33,3 +34,21 @@ message LogoutResponse {
   StatusCode status = 1;
 }
 
+message ClientMessages {
+  string sessionID = 1;
+  string message = 2;
+}
+
+message ChatMessages {
+  StatusCode status = 1;
+  string message = 2;
+}
+
+message GetUsersMessage {
+  string sessionID = 1;
+}
+
+message UserInfoMessage {
+  StatusCode status = 1;
+  repeated string user = 2;
+}
