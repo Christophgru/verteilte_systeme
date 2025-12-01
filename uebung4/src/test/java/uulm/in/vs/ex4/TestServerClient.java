@@ -15,7 +15,6 @@ public class TestServerClient {
     public void testLoginLogout() {
         System.out.println("Starting testLoginLogout...");
 
-        // Reset static maps before this test
         ChatServer.resetState();
 
         server = new ChatServer();
@@ -23,13 +22,13 @@ public class TestServerClient {
         client = new ChatClient("localhost", 5555);
 
         String username = "testuser";
-        String sessionid = client.login(username);
-        System.out.println("Logged in with session ID: " + sessionid);
+        String sessionId = client.login(username);
+        System.out.println("Logged in with session ID: " + sessionId);
 
         int count = server.getConnectedUsersCount();
         assertEquals(1, count, "Expected 1 connected user");
 
-        client.logout(username, sessionid);
+        client.logout();
         count = server.getConnectedUsersCount();
         assertEquals(0, count, "Expected 0 connected users");
 
@@ -41,7 +40,6 @@ public class TestServerClient {
     public void testChatBroadcastToAllClients() throws Exception {
         System.out.println("Starting testChatBroadcastToAllClients...");
 
-        // Reset static maps before this test
         ChatServer.resetState();
 
         server = new ChatServer();
@@ -50,32 +48,21 @@ public class TestServerClient {
         ChatClient client1 = new ChatClient("localhost", 5556);
         ChatClient client2 = new ChatClient("localhost", 5556);
 
-        // Login both clients
         String user1 = "user1";
         String user2 = "user2";
+
         String sessionId1 = client1.login(user1);
         String sessionId2 = client2.login(user2);
 
         assertNotNull(sessionId1, "Session ID for client1 must not be null");
         assertNotNull(sessionId2, "Session ID for client2 must not be null");
 
-        // Start chat streams for both clients
-        client1.startChatStream(sessionId1);
-        client2.startChatStream(sessionId2);
+        // Start chat streams for both clients.
+        // startChatStream() will internally send a first registration message.
+        client1.startChatStream();
+        client2.startChatStream();
 
-        // First message from each client is used by the server to register them.
-        client1.sendChatMessage("register-client1");
-        client2.sendChatMessage("register-client2");
-
-        // Give the server a moment to process registration messages
-        client1.waitForNextMessage(500, TimeUnit.MILLISECONDS);
-        client2.waitForNextMessage(500, TimeUnit.MILLISECONDS);
-
-        // Clear any messages from registration phase
-        client1.clearIncomingMessages();
-        client2.clearIncomingMessages();
-
-        // Now send a real chat message from client1 – this should be broadcast to all
+        // Now send a real chat message from client1
         String messageFromClient1 = "Hello from client1";
         client1.sendChatMessage(messageFromClient1);
 
@@ -95,15 +82,88 @@ public class TestServerClient {
         assertEquals(expectedBroadcastMessage, receivedByClient2.getMessage(),
                 "Client2 should receive the correct broadcast message");
 
-        // Cleanup
-        client1.stopChatStream();
-        client2.stopChatStream();
-
-        client1.logout(user1, sessionId1);
-        client2.logout(user2, sessionId2);
+        client1.logout();
+        client2.logout();
 
         client1.shutdown();
         client2.shutdown();
         server.stopServer();
     }
+
+    @Test
+    public void testChatStreamClosedOnLogout() throws Exception {
+        System.out.println("Starting testChatStreamClosedOnLogout...");
+
+        ChatServer.resetState();
+
+        server = new ChatServer();
+        server.startServerAsync(5557);
+
+        ChatClient client1 = new ChatClient("localhost", 5557);
+
+        String user1 = "user1";
+        String sessionId1 = client1.login(user1);
+        assertNotNull(sessionId1, "Session ID must not be null");
+
+        // Start chat stream; this will send a registration message internally
+        client1.startChatStream();
+
+        // Give the server some time to process registration (not strictly required, but
+        // safe)
+        client1.waitForNextMessage(500, TimeUnit.MILLISECONDS);
+        client1.clearIncomingMessages();
+
+        assertFalse(client1.isChatStreamCompleted(), "Chat stream should still be open before logout");
+
+        // Now logout -> server should close the chat stream (onCompleted on client
+        // side)
+        client1.logout();
+
+        // Wait a bit for onCompleted() to arrive on the client
+        long deadline = System.currentTimeMillis() + 2000; // 2 seconds
+        while (!client1.isChatStreamCompleted() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(100);
+        }
+
+        assertTrue(client1.isChatStreamCompleted(), "Chat stream should be completed after logout");
+
+        client1.shutdown();
+        server.stopServer();
+    }
+
+    @Test
+    public void testListUsers() {
+        System.out.println("Starting testListUsers...");
+
+        ChatServer.resetState();
+
+        server = new ChatServer();
+        server.startServerAsync(5558);
+
+        ChatClient client1 = new ChatClient("localhost", 5558);
+        ChatClient client2 = new ChatClient("localhost", 5558);
+
+        String user1 = "alice";
+        String user2 = "bob";
+
+        String sessionId1 = client1.login(user1);
+        String sessionId2 = client2.login(user2);
+
+        assertNotNull(sessionId1, "Session ID for client1 must not be null");
+        assertNotNull(sessionId2, "Session ID for client2 must not be null");
+
+        java.util.List<String> users = client1.listUsers();
+
+        assertTrue(users.contains(user1), "User list should contain " + user1);
+        assertTrue(users.contains(user2), "User list should contain " + user2);
+        assertEquals(2, users.size(), "There should be exactly two users logged in");
+
+        client1.logout();
+        client2.logout();
+
+        client1.shutdown();
+        client2.shutdown();
+        server.stopServer();
+    }
+
 }

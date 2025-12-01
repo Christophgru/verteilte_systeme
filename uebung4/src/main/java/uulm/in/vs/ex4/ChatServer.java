@@ -41,8 +41,16 @@ public class ChatServer {
         public void logout(LogoutRequest request, StreamObserver<LogoutResponse> responseObserver) {
             String username = request.getUsername();
             String sessionToken = request.getSessionID();
+
             if (users.containsKey(username) && users.get(username).equals(sessionToken)) {
+                // Remove user
                 users.remove(username);
+                StreamObserver<ChatMessages> chatObserver = sessions.remove(sessionToken);
+                if (chatObserver != null) {
+                    // This will cause onCompleted() to be called on the client side
+                    chatObserver.onCompleted();
+                }
+
                 LogoutResponse response = LogoutResponse.newBuilder()
                         .setStatus(StatusCode.OK)
                         .build();
@@ -109,6 +117,28 @@ public class ChatServer {
             };
         }
 
+        @Override
+        public void listUsers(GetUsersMessage request, StreamObserver<UserInfoMessage> responseObserver) {
+            String sessionId = request.getSessionID();
+
+            // Check if the given session ID belongs to any logged-in user
+            boolean validSession = users.containsValue(sessionId);
+
+            UserInfoMessage.Builder builder = UserInfoMessage.newBuilder();
+
+            if (!validSession) {
+                // Invalid session: return FAILED and an empty user list
+                builder.setStatus(StatusCode.FAILED);
+            } else {
+                // Valid session: return OK and all currently logged-in usernames
+                builder.setStatus(StatusCode.OK);
+                builder.addAllUser(users.keySet()); // users: username -> sessionID
+            }
+
+            UserInfoMessage response = builder.build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        }
     }
 
     public static void main(String[] args) {
