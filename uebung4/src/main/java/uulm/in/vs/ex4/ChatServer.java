@@ -2,14 +2,17 @@ package uulm.in.vs.ex4;
 
 // mvn clean compile
 // mvn exec:java -Dexec.mainClass="uulm.in.vs.ex4.ChatServer"
-// ./grpcwebproxy-v0.15.0-win64.exe --backend_addr=localhost:5555 --run_tls_server=false --server_http_debug_port=8080 --allow_all_origins
+// ./grpcwebproxy-v0.15.0-win64.exe --backend_addr=localhost:5555 --backend_tls=false --run_tls_server=false --server_http_debug_port=8080 --allow_all_origins
 // cd /d/bin/uniulm/verteilte_systeme/uebung4/src/main && node server.js
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 
 public class ChatServer {
@@ -61,8 +64,12 @@ public class ChatServer {
 
                 StreamObserver<ChatMessages> chatObserver = sessions.remove(sessionToken);
                 if (chatObserver != null) {
-                    // This will cause onCompleted() to be called on the client side
-                    chatObserver.onCompleted();
+                    try {
+                        chatObserver.onCompleted();
+                    } catch (Exception e) {
+                        System.err
+                                .println("Error completing stream for session " + sessionToken + ": " + e.getMessage());
+                    }
                 }
 
                 LogoutResponse response = LogoutResponse.newBuilder()
@@ -83,14 +90,12 @@ public class ChatServer {
         // ===== Original bidi-streaming RPC for non-web clients =====
         @Override
         public StreamObserver<ClientMessages> chatStream(StreamObserver<ChatMessages> responseObserver) {
-            // Called once for every new client connection
             return new StreamObserver<ClientMessages>() {
 
                 String currentSessionId = null;
 
                 @Override
                 public void onNext(ClientMessages value) {
-                    // First message: only register this client's session, do not broadcast yet
                     if (currentSessionId == null) {
                         currentSessionId = value.getSessionID();
                         sessions.put(currentSessionId, responseObserver);
@@ -103,24 +108,29 @@ public class ChatServer {
                     String username = sessionToUser.getOrDefault(currentSessionId, "unknown");
                     System.out.println("[" + currentSessionId + " / " + username + "] says (bidi): " + msg);
 
-                    // Broadcast to all connected chat sessions
                     ChatMessages broadcastMsg = ChatMessages.newBuilder()
                             .setStatus(StatusCode.OK)
                             .setMessage("[" + username + "]: " + msg)
                             .build();
 
-                    for (StreamObserver<ChatMessages> obs : sessions.values()) {
+                    // broadcast safely
+                    List<String> toRemove = new ArrayList<>();
+                    for (var entry : sessions.entrySet()) {
+                        String sid = entry.getKey();
+                        StreamObserver<ChatMessages> obs = entry.getValue();
                         try {
                             obs.onNext(broadcastMsg);
-                        } catch (RuntimeException e) {
-                            // Ignore broken streams here
+                        } catch (Exception e) {
+                            System.err.println("Removing broken session " + sid + " due to error: " + e.getMessage());
+                            toRemove.add(sid);
                         }
                     }
+                    toRemove.forEach(sessions::remove);
                 }
 
                 @Override
                 public void onError(Throwable t) {
-                    System.err.println("Error in bidi stream of session: " + currentSessionId + ": " + t.getMessage());
+                    System.err.println("Error in bidi stream of session: " + currentSessionId + ": " + t);
                     if (currentSessionId != null) {
                         sessions.remove(currentSessionId);
                     }
@@ -146,7 +156,6 @@ public class ChatServer {
             System.out.println("chatStreamBrowser called for session: " + sessionId + ", user=" + username);
 
             if (username == null) {
-                // Session not known -> tell client to log in again
                 ChatMessages err = ChatMessages.newBuilder()
                         .setStatus(StatusCode.FAILED)
                         .setMessage("Invalid sessionID, please log in again.")
@@ -156,19 +165,26 @@ public class ChatServer {
                 return;
             }
 
-            // Register this browser stream
-            sessions.put(sessionId, responseObserver);
+            // We need the server-side variant to detect cancellation
+            ServerCallStreamObserver<ChatMessages> serverObserver = (ServerCallStreamObserver<ChatMessages>) responseObserver;
+
+            // Remove this session when the client disconnects / stream is cancelled
+            serverObserver.setOnCancelHandler(() -> {
+                System.out.println("Browser stream cancelled for session: " + sessionId);
+                sessions.remove(sessionId);
+            });
+
+            sessions.put(sessionId, serverObserver);
             System.out.println("Registered browser stream for session: " + sessionId
                     + " (total sessions = " + sessions.size() + ")");
 
-            // Optional welcome message
             ChatMessages hello = ChatMessages.newBuilder()
                     .setStatus(StatusCode.OK)
                     .setMessage("Welcome to the chat, " + username + "!")
                     .build();
-            responseObserver.onNext(hello);
+            serverObserver.onNext(hello);
 
-            // IMPORTANT: do NOT call onCompleted(); keep stream open
+            // do NOT call onCompleted(); keep stream open
         }
 
         // ===== New: browser-friendly unary "sendMessage" RPC =====
@@ -192,12 +208,13 @@ public class ChatServer {
                 return;
             }
 
-            // Broadcast to all connected streams (bidi + browser)
             ChatMessages broadcastMsg = ChatMessages.newBuilder()
                     .setStatus(StatusCode.OK)
                     .setMessage("[" + username + "]: " + msg)
                     .build();
 
+            // broadcast safely
+            List<String> toRemove = new ArrayList<>();
             for (var entry : sessions.entrySet()) {
                 String sid = entry.getKey();
                 StreamObserver<ChatMessages> obs = entry.getValue();
@@ -205,11 +222,11 @@ public class ChatServer {
                     obs.onNext(broadcastMsg);
                 } catch (Exception e) {
                     System.err.println("Removing broken session " + sid + " due to error: " + e.getMessage());
-                    sessions.remove(sid);
+                    toRemove.add(sid);
                 }
             }
+            toRemove.forEach(sessions::remove);
 
-            // Unary ACK to the sender
             ChatMessages ack = ChatMessages.newBuilder()
                     .setStatus(StatusCode.OK)
                     .setMessage("Message delivered.")
@@ -230,7 +247,7 @@ public class ChatServer {
                 builder.setStatus(StatusCode.FAILED);
             } else {
                 builder.setStatus(StatusCode.OK);
-                builder.addAllUser(users.keySet()); // users: username -> sessionID
+                builder.addAllUser(users.keySet());
             }
 
             UserInfoMessage response = builder.build();
@@ -285,7 +302,6 @@ public class ChatServer {
         return users.size();
     }
 
-    // helper for tests so static state does not leak between tests
     public static void resetState() {
         users.clear();
         sessionToUser.clear();
