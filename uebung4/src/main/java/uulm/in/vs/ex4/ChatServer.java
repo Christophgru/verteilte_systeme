@@ -1,5 +1,7 @@
 package uulm.in.vs.ex4;
 
+//mvn generate-sources
+//mvn exec:java -Dexec.mainClass="uulm.in.vs.ex4.ChatServer"
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -144,12 +146,14 @@ public class ChatServer {
     public static void main(String[] args) {
         ChatServer server = new ChatServer();
         server.startServerAsync(5555);
-        try {
-            Thread.sleep(20000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                break;
+            }
+            System.out.println("Shutting down Chat Server...");
         }
-        System.out.println("Shutting down Chat Server...");
     }
 
     public void stopServer() {
