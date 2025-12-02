@@ -6,6 +6,7 @@ import {
   ClientMessages,
   GetUsersMessage,
   StatusCode,
+  ChatStreamRequest,   // <-- add this
 } from "../../generated/chat_pb";
 // TODO: wire this into your DOM / UI
 console.log("Client loaded:", ChatClient ? "OK" : "missing");
@@ -105,14 +106,15 @@ logoutBtn.addEventListener("click", () => {
 });
 
 // --- Chat streaming ---
-
 function startChatStream() {
   if (!sessionID) return;
   if (chatStream) return; // already started
 
-  // IMPORTANT: bidi streaming support depends on your grpc-web setup.
-  // For pure grpc-web, you might need to change the RPC to server-streaming only.
-  chatStream = client.chatStream({}, {}); // metadata, options
+  const req = new ChatStreamRequest();
+  req.setSessionid(sessionID);
+
+  // server-streaming RPC
+  chatStream = client.chatStreamBrowser(req, {}); // metadata
 
   chatStream.on("data", (resp) => {
     const status = resp.getStatus();
@@ -139,6 +141,7 @@ function startChatStream() {
   logLine("Chat stream started.");
 }
 
+
 function stopChatStream() {
   if (chatStream) {
     // Method name varies by implementation; often 'cancel' or 'end'.
@@ -153,8 +156,8 @@ function stopChatStream() {
 sendBtn.addEventListener("click", () => {
   const text = messageInput.value.trim();
   if (!text) return;
-  if (!chatStream) {
-    logLine("Chat stream is not open.");
+  if (!sessionID) {
+    logLine("Not logged in.");
     return;
   }
 
@@ -162,17 +165,27 @@ sendBtn.addEventListener("click", () => {
   msg.setSessionid(sessionID);
   msg.setMessage(text);
 
-  // grpc-web bidi support varies; if your implementation doesn’t support .write,
-  // you’ll have to rework chatStream into something unary/server-streaming compatible.
-  if (typeof chatStream.write === "function") {
-    chatStream.write(msg);
-  } else {
-    logLine("Client streaming not supported by this transport.");
-  }
+  client.sendMessage(msg, {}, (err, resp) => {
+    if (err) {
+      console.error("sendMessage error:", err);
+      logLine("sendMessage error: " + err.message);
+      return;
+    }
 
-  logLine("You: " + text);
+    const status = resp.getStatus();
+    const reply = resp.getMessage();
+
+    if (status === StatusCode.OK) {
+      // You can log the user's message locally
+      logLine("You: " + text);
+    } else {
+      logLine("sendMessage failed (status " + status + "): " + reply);
+    }
+  });
+
   messageInput.value = "";
 });
+
 
 // --- List users ---
 
@@ -200,4 +213,3 @@ listUsersBtn.addEventListener("click", () => {
     logLine("Online users: " + users.join(", "));
   });
 });
-s

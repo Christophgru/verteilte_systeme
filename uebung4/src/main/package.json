@@ -11,6 +11,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "google-protobuf": "^4.0.1",
+    "grpc-web": "^2.0.2"
+  },
+  "devDependencies": {
+    "webpack-cli": "^6.0.1"
   }
 }

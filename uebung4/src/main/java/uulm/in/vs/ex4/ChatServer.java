@@ -1,7 +1,10 @@
 package uulm.in.vs.ex4;
 
-//mvn generate-sources
+//mvn clean compile
 //mvn exec:java -Dexec.mainClass="uulm.in.vs.ex4.ChatServer"
+//./grpcwebproxy-v0.15.0-win64.exe --backend_addr=localhost:5555 --run_tls_server=false --server_http_debug_port=8080 --allow_all_origins
+// cd /d/bin/uniulm/verteilte_systeme/uebung4/src/main && node server.js
+
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -12,11 +15,13 @@ import io.grpc.stub.StreamObserver;
 public class ChatServer {
     // username -> sessionID
     private final static ConcurrentHashMap<String, String> users = new ConcurrentHashMap<>();
-    // sessionID -> response observer for that client's chat stream
+    // sessionID -> response observer for that client's chat stream (bidi or
+    // browser)
     private final static ConcurrentHashMap<String, StreamObserver<ChatMessages>> sessions = new ConcurrentHashMap<>();
     private Server server;
 
     public static class ChatService extends ChatGrpc.ChatImplBase {
+
         @Override
         public void login(LoginRequest request, StreamObserver<LoginResponse> responseObserver) {
             String username = request.getUsername();
@@ -68,6 +73,7 @@ public class ChatServer {
             }
         }
 
+        // ===== Original bidi-streaming RPC for non-web clients =====
         @Override
         public StreamObserver<ClientMessages> chatStream(StreamObserver<ChatMessages> responseObserver) {
             // Called once for every new client connection
@@ -95,8 +101,11 @@ public class ChatServer {
                             .build();
 
                     for (StreamObserver<ChatMessages> obs : sessions.values()) {
-                        // Send the message to each client's stream
-                        obs.onNext(broadcastMsg);
+                        try {
+                            obs.onNext(broadcastMsg);
+                        } catch (RuntimeException e) {
+                            // Ignore broken streams here
+                        }
                     }
                 }
 
@@ -117,6 +126,82 @@ public class ChatServer {
                     responseObserver.onCompleted();
                 }
             };
+        }
+
+        // ===== New: browser-friendly server-streaming RPC =====
+        @Override
+        public void chatStreamBrowser(ChatStreamRequest request,
+                StreamObserver<ChatMessages> responseObserver) {
+            String sessionId = request.getSessionID();
+            System.out.println("chatStreamBrowser called for session: " + sessionId);
+
+            // Check session is valid (belongs to a logged-in user)
+            boolean validSession = users.containsValue(sessionId);
+            if (!validSession) {
+                ChatMessages err = ChatMessages.newBuilder()
+                        .setStatus(StatusCode.FAILED)
+                        .setMessage("Invalid sessionID, please log in again.")
+                        .build();
+                responseObserver.onNext(err);
+                responseObserver.onCompleted();
+                return;
+            }
+
+            // Register this browser stream in the same sessions map
+            sessions.put(sessionId, responseObserver);
+
+            // Optional welcome message
+            ChatMessages hello = ChatMessages.newBuilder()
+                    .setStatus(StatusCode.OK)
+                    .setMessage("Welcome to the chat, session " + sessionId + "!")
+                    .build();
+            responseObserver.onNext(hello);
+
+            // IMPORTANT: do NOT call onCompleted() here; we keep the stream open
+            // until client disconnects or logout() closes it.
+        }
+
+        // ===== New: browser-friendly unary "sendMessage" RPC =====
+        @Override
+        public void sendMessage(ClientMessages request,
+                StreamObserver<ChatMessages> responseObserver) {
+            String sessionId = request.getSessionID();
+            String msg = request.getMessage();
+
+            System.out.println("sendMessage from session " + sessionId + ": " + msg);
+
+            boolean validSession = users.containsValue(sessionId);
+            if (!validSession) {
+                ChatMessages err = ChatMessages.newBuilder()
+                        .setStatus(StatusCode.FAILED)
+                        .setMessage("Invalid sessionID, cannot send message.")
+                        .build();
+                responseObserver.onNext(err);
+                responseObserver.onCompleted();
+                return;
+            }
+
+            // Broadcast to all connected streams (bidi + browser)
+            ChatMessages broadcastMsg = ChatMessages.newBuilder()
+                    .setStatus(StatusCode.OK)
+                    .setMessage("[" + sessionId + "]: " + msg)
+                    .build();
+
+            for (StreamObserver<ChatMessages> obs : sessions.values()) {
+                try {
+                    obs.onNext(broadcastMsg);
+                } catch (RuntimeException e) {
+                    // Ignore broken streams
+                }
+            }
+
+            // Unary ACK to the sender
+            ChatMessages ack = ChatMessages.newBuilder()
+                    .setStatus(StatusCode.OK)
+                    .setMessage("Message delivered.")
+                    .build();
+            responseObserver.onNext(ack);
+            responseObserver.onCompleted();
         }
 
         @Override
@@ -152,8 +237,10 @@ public class ChatServer {
             } catch (InterruptedException e) {
                 break;
             }
-            System.out.println("Shutting down Chat Server...");
         }
+        System.out.println("Shutting down Chat Server...");
+        server.stopServer();
+
     }
 
     public void stopServer() {
