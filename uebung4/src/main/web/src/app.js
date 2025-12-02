@@ -165,6 +165,7 @@ sendBtn.addEventListener("click", () => {
   msg.setSessionid(sessionID);
   msg.setMessage(text);
 
+  // Unary RPC: sendMessage
   client.sendMessage(msg, {}, (err, resp) => {
     if (err) {
       console.error("sendMessage error:", err);
@@ -176,7 +177,7 @@ sendBtn.addEventListener("click", () => {
     const reply = resp.getMessage();
 
     if (status === StatusCode.OK) {
-      // You can log the user's message locally
+      // local echo (actual broadcast comes via chatStreamBrowser)
       logLine("You: " + text);
     } else {
       logLine("sendMessage failed (status " + status + "): " + reply);
@@ -185,6 +186,7 @@ sendBtn.addEventListener("click", () => {
 
   messageInput.value = "";
 });
+
 
 
 // --- List users ---
