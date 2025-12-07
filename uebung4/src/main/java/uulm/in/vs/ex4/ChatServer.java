@@ -1,10 +1,5 @@
 package uulm.in.vs.ex4;
 
-// mvn clean compile
-// mvn exec:java -Dexec.mainClass="uulm.in.vs.ex4.ChatServer"
-// ./grpcwebproxy-v0.15.0-win64.exe --backend_addr=localhost:5555 --backend_tls=false --run_tls_server=false --server_http_debug_port=8080 --allow_all_origins
-// cd /d/bin/uniulm/verteilte_systeme/uebung4/src/main && node server.js
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -237,23 +232,37 @@ public class ChatServer {
 
         @Override
         public void listUsers(GetUsersMessage request, StreamObserver<UserInfoMessage> responseObserver) {
-            String sessionId = request.getSessionID();
+            try {
+                String sessionId = request.getSessionID();
+                System.out.println("listUsers called with sessionId='" + sessionId + "'");
 
-            boolean validSession = sessionToUser.containsKey(sessionId);
+                boolean validSession = sessionToUser.containsKey(sessionId);
+                UserInfoMessage.Builder builder = UserInfoMessage.newBuilder();
 
-            UserInfoMessage.Builder builder = UserInfoMessage.newBuilder();
+                if (!validSession) {
+                    System.out.println("listUsers: invalid sessionId");
+                    builder.setStatus(StatusCode.FAILED);
+                } else {
+                    builder.setStatus(StatusCode.OK);
 
-            if (!validSession) {
-                builder.setStatus(StatusCode.FAILED);
-            } else {
-                builder.setStatus(StatusCode.OK);
-                builder.addAllUser(users.keySet());
+                    // copy to avoid any weird concurrent-iteration issues
+                    List<String> currentUsers = new ArrayList<>(users.keySet());
+                    System.out.println("listUsers: returning users = " + currentUsers);
+                    builder.addAllUser(currentUsers);
+                }
+
+                responseObserver.onNext(builder.build());
+                responseObserver.onCompleted();
+            } catch (Exception e) {
+                e.printStackTrace(); // this is what we want to see in the server console
+                responseObserver.onError(
+                        io.grpc.Status.INTERNAL
+                                .withDescription("listUsers failed: " + e.getMessage())
+                                .withCause(e)
+                                .asRuntimeException());
             }
-
-            UserInfoMessage response = builder.build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
         }
+
     }
 
     public static void main(String[] args) {

@@ -1,10 +1,12 @@
 package uulm.in.vs.ex4;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 public class TestServerClient {
 
@@ -66,7 +68,7 @@ public class TestServerClient {
         String messageFromClient1 = "Hello from client1";
         client1.sendChatMessage(messageFromClient1);
 
-        String expectedBroadcastMessage = "[" + sessionId1 + "]: " + messageFromClient1;
+        String expectedBroadcastMessage = "[" + user1 + "]: " + messageFromClient1;
 
         ChatMessages receivedByClient1 = client1.waitForNextMessage(3, TimeUnit.SECONDS);
         ChatMessages receivedByClient2 = client2.waitForNextMessage(3, TimeUnit.SECONDS);
