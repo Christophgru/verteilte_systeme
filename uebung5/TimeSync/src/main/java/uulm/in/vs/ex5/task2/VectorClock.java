@@ -1,24 +1,36 @@
 package uulm.in.vs.ex5.task2;
 
+import org.jetbrains.annotations.Contract;
+
 import java.util.Collection;
 import java.util.Optional;
 
 public class VectorClock {
-        // TODO
+        int own_id;
+        long time[];
 
+    @Contract(pure = true)
     public VectorClock(Collection<Long> C, int id) {
-        // TODO
+        int size =C.size();
+        time=new long[size];
+        int i=0;
+        for (long c :C) {
+            time[i]=c;
+            i++;
+        }
+        own_id=id;
     }
 
     public VectorClock(int size, int id){
-        // TODO
+        own_id=id;
+        time=new long[size];
     }
 
     /**
     * Returns all times in the vector
     */
     public long[] getTime() {
-        // TODO
+        return time;
     }
 
     /**
@@ -26,21 +38,29 @@ public class VectorClock {
     */
     public long increment() {
         // TODO
+
+        return time[own_id]++ +1;
     }
 
     /**
     * Returns time of given id
     */
     public long getTime(int id) {
-        // TODO
+        return time[id];
     }
 
     public long merge(VectorClock b) throws IllegalArgumentException{
-        // TODO
+        if( this.size()!=b.size())throw new IllegalArgumentException("");
+        for (int i = 0; i < b.size(); i++) {
+            if(b.getTime(i)>getTime(i)){
+                time[i]=b.getTime(i);
+            }
+        }
+        return increment();
     }
 
     public long size() {
-        // TODO
+        return time.length;
     }
 
     /**
@@ -48,7 +68,12 @@ public class VectorClock {
     * IllegalArgumentException is thrown when vectors are of different size.
     */
     public boolean geq(VectorClock b) throws IllegalArgumentException {
-        // TODO
+        // ∀i : A[i] ≤ B[i] ret true-> if E A[i]>B[i] ret false
+        if(this.size()!=b.size())throw new IllegalArgumentException();
+        for (int i = 0; i < size(); i++) {
+            if(time[i]<b.getTime(i))return false;
+        }
+        return true;
     }
 
     /**
@@ -57,10 +82,19 @@ public class VectorClock {
      * @throws IllegalArgumentException If Vectors are of different size
      */
     public static Optional<Integer> compare(VectorClock a, VectorClock b) throws IllegalArgumentException {
-        // TODO
+        if(a.size()!=b.size())throw new IllegalArgumentException();
+        if(a.geq(b)&&b.geq(a))return Optional.of(0);
+        if(a.geq(b)) return Optional.of(1);
+        if(b.geq(a)) return Optional.of(-1);
+        return Optional.empty();
     }
 
     public boolean equals(VectorClock b) {
-        // TODO
+        long size=size();
+        if(b.size()>size)size=b.size();
+        for (int i = 0; i < size; i++) {
+            if(time[i]!=b.getTime(i))return false;
+        }
+        return true;
     }
 }

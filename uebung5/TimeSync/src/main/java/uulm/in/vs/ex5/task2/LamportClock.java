@@ -1,45 +1,48 @@
 package uulm.in.vs.ex5.task2;
 
 public class LamportClock implements Comparable<LamportClock>{
-        // TODO
+        private long time;
 
     public LamportClock() {
-        // TODO
+        time=0;
     }
 
     public LamportClock(long init) {
-        // TODO
+        time=(int)init;
     }
 
     public long getTime() {
-        // TODO
+        return time;
     }
 
     /**
     * Also returns incremented time.
     */
     public long increment() {
-        // TODO
+        time+=1;
+        return time;
     }
 
     public long merge(LamportClock b) {
-        // TODO
+        time = Math.max(this.time, b.time) + 1;
+        return time;
     }
 
     public static LamportClock merge(LamportClock a, LamportClock b) {
-        // TODO
+        LamportClock c= new LamportClock( Math.max(a.time, b.time) + 1);
+        return c;
     }
 
     public static int compare(LamportClock a, LamportClock b) {
-        // TODO
+        return Long.compare(a.time, b.time);
     }
 
     public boolean equals(LamportClock b) {
-        // TODO
+        return this.time == b.time;
     }
 
     @Override
     public int compareTo(LamportClock l) {
-        // TODO
+        return Long.compare(this.time, l.time);
     }
 }

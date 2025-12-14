@@ -9,7 +9,8 @@ import org.zeromq.ZContext;
 
 public class SynchronizedClock implements Clock {
     // TODO
-    
+    BaseClock baseClock;
+
     public SynchronizedClock(ZContext context, String host, int numRequests) {
         // TODO
     }
@@ -18,7 +19,8 @@ public class SynchronizedClock implements Clock {
         // TODO
     }
 
-    public long getTime() { 
+    public long getTime() {
         // TODO
+        return 0;
     }
 }
