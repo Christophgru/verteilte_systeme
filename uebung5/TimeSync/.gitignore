@@ -37,10 +37,3 @@ build/
 
 ### Mac OS ###
 .DS_Store
-
-src/main/web/package-lock.json
-src/main/web/node_modules/
-src/main/generated/*
-src/main/node_modules/*
-package-lock.json
-src/main/web/public/bundle.js

@@ -9,6 +9,10 @@ service Chat {
 
   rpc chatStream (stream ClientMessages) returns (stream ChatMessages) {}
   rpc listUsers (GetUsersMessage) returns (UserInfoMessage) {}
+
+  // For browser-only usage (server-streaming + unary)
+  rpc chatStreamBrowser (ChatStreamRequest) returns (stream ChatMessages) {}
+  rpc sendMessage (ClientMessages) returns (ChatMessages);
 }
 
 enum StatusCode {
@@ -51,4 +55,9 @@ message GetUsersMessage {
 message UserInfoMessage {
   StatusCode status = 1;
   repeated string user = 2;
+}
+
+// New: request type for browser chat stream
+message ChatStreamRequest {
+  string sessionID = 1;
 }

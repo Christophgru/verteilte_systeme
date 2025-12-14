@@ -183,4 +183,27 @@ public class ChatClient {
     public String getSessionId() {
         return sessionId;
     }
+
+    public static void main(String[] args) {
+        ChatClient client = new ChatClient("localhost", 5555);
+        try {
+            String sessionId = client.login("exampleUser");
+            System.out.println("Logged in with session ID: " + sessionId);
+
+            client.startChatStream();
+            client.sendChatMessage("Hello, World!");
+
+            ChatMessages message = client.waitForNextMessage(5, TimeUnit.SECONDS);
+            if (message != null) {
+                System.out.println("Received message: " + message.getMessage());
+            } else {
+                System.out.println("No message received within timeout.");
+            }
+
+            client.stopChatStream();
+            client.logout();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }

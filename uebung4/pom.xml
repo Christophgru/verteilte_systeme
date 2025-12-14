@@ -113,7 +113,9 @@
                 <executions>
                     <execution>
                         <goals>
+                            <!-- Generate normal Java from .proto -->
                             <goal>compile</goal>
+                            <!-- Generate gRPC stubs using the grpc-java plugin -->
                             <goal>compile-custom</goal>
                         </goals>
                     </execution>
