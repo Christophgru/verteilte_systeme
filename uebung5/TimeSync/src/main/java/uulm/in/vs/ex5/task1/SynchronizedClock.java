@@ -9,9 +9,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Cristian synchronized clock.
- */
 public class SynchronizedClock implements Clock {
 
     private final BaseClock baseClock;
@@ -20,17 +17,14 @@ public class SynchronizedClock implements Clock {
 
     private final int numRequests;
 
-    // last estimated offset: server_estimated_now - local_now
     private volatile long offsetMs = 0;
 
     // Tuning
-    // Synchronisation
     private static final long SYNC_PERIOD_MS = 1000;
 
     // Do nothing inside this band (tick quantization is 100ms, plus latency noise)
     private static final long DEAD_BAND_MS = 120;
 
-    // Region thresholds (offset magnitude)
     private static final long SMALL_OFFSET_MS = 500;
     private static final long MEDIUM_OFFSET_MS = 2000;
 
@@ -39,9 +33,6 @@ public class SynchronizedClock implements Clock {
 
     // Medium region: limited forward step, still gentle
     private static final long MAX_MEDIUM_FORWARD_STEP_MS = 200;
-
-    // How many gradual slow-down steps in the medium-ahead region
-    private static final int MEDIUM_AHEAD_SLOWDOWN_STEPS = 2;
 
     public SynchronizedClock(ZContext context, String host, int numRequests) {
         this(context, host, numRequests, 0L, true);
@@ -63,12 +54,10 @@ public class SynchronizedClock implements Clock {
 
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
-        // do one initial sync (recommended)
         if (syncAtStart) {
             syncOnce();
         }
 
-        // periodic sync
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 syncOnce();
@@ -110,7 +99,7 @@ public class SynchronizedClock implements Clock {
         long newOffset = serverAtReceive - localNow;
         offsetMs = newOffset;
 
-        // Debug (optional): uncomment to see what's happening
+        // Debug
         // Util.logTime("sync: rtt=" + best.rtt + "ms offset=" + newOffset + "ms local="
         // + localNow + " server~=" + serverAtReceive);
 
@@ -133,10 +122,6 @@ public class SynchronizedClock implements Clock {
 
     private Sample sampleServerTime() {
         long t0 = baseClock.getTime();
-
-        // Most servers accept an empty request.
-        // If yours needs a keyword, replace with:
-        // socket.send("TIME".getBytes(StandardCharsets.UTF_8), 0);
         socket.send(new byte[0], 0);
 
         byte[] reply = socket.recv(0);
@@ -146,14 +131,10 @@ public class SynchronizedClock implements Clock {
 
         String msg = new String(reply, StandardCharsets.UTF_8).trim();
 
-        // Many teaching servers return a single long in ASCII.
-        // If your server returns something else, print msg and adjust parsing.
         try {
             long serverTime = Long.parseLong(msg);
             return new Sample(t0, t1, serverTime);
         } catch (NumberFormatException e) {
-            // If parsing fails, log once (optional)
-            // Util.logTime("Cannot parse server reply: '" + msg + "'");
             return null;
         }
     }
@@ -161,7 +142,7 @@ public class SynchronizedClock implements Clock {
     private void applyAdjustment(long offset) {
         long abs = Math.abs(offset);
 
-        // 1) Deadband to ignore noise + BaseClock quantization
+        // 1) Deadband to ignore noise
         if (abs <= DEAD_BAND_MS) {
             baseClock.setNormalSpeed();
             return;
@@ -204,10 +185,7 @@ public class SynchronizedClock implements Clock {
             }
 
             if (abs <= MEDIUM_OFFSET_MS) {
-                // Medium ahead: a couple of gentle slow-down steps
-                for (int i = 0; i < MEDIUM_AHEAD_SLOWDOWN_STEPS; i++) {
-                    baseClock.decreaseSpeed();
-                }
+                baseClock.decreaseSpeed();
                 return;
             }
 
@@ -216,7 +194,6 @@ public class SynchronizedClock implements Clock {
         }
     }
 
-    // optional cleanup if you ever need it
     public void shutdown() {
         scheduler.shutdownNow();
         baseClock.shutdown();
