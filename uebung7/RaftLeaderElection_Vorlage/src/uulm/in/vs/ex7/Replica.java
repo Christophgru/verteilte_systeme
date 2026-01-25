@@ -28,12 +28,12 @@ public class Replica {
 
     // Timers
     private volatile ScheduledFuture<?> electionTimeoutFuture;
-    private volatile ScheduledFuture<?> heartbeatFuture;
+    private volatile ScheduledFuture<?> heartbeatFuture;//triggers if we dont get a heartbeat
 
     // Timing (tune as needed)
-    private static final long HEARTBEAT_INTERVAL_MS = 50;      // leader sends heartbeats
+    private static final long HEARTBEAT_INTERVAL_MS = 50;      // leader sends heartbeats every x ms
     private static final long ELECTION_TIMEOUT_MIN_MS = 200;   // follower/candidate election timeout range
-    private static final long ELECTION_TIMEOUT_MAX_MS = 400;
+    private static final long ELECTION_TIMEOUT_MAX_MS = 400;   // start new election if not elected or terminated after x ms
 
     public Replica(int replicaID, int numReplicas, CommunicationHandler communicationHandler) {
         this.replicaID = replicaID;
@@ -49,7 +49,6 @@ public class Replica {
         resetElectionTimeout();
     }
 
-    /* ------------------------- Timers ------------------------- */
 
     private long randomElectionTimeoutMs() {
         return ThreadLocalRandom.current().nextLong(ELECTION_TIMEOUT_MIN_MS, ELECTION_TIMEOUT_MAX_MS + 1);
@@ -88,7 +87,6 @@ public class Replica {
         }
     }
 
-    /* ------------------------- Raft actions ------------------------- */
 
     private void sendHeartbeat() {
         if (currentState != State.LEADER) return;
@@ -96,10 +94,8 @@ public class Replica {
     }
 
     private void onElectionTimeout() {
-        // In Raft: followers and candidates start a new election when election timeout fires.
+        //followers and candidates start a new election when election timeout fires.
         if (currentState == State.LEADER) return;
-
-        // Start new election (or new term if already candidate)
         startElection();
     }
 
@@ -139,13 +135,10 @@ public class Replica {
         startHeartbeats();
     }
 
-    /* ------------------------- Message processing ------------------------- */
-
     private void processMessages() {
         while (true) {
             try {
                 NetworkMessage message = messageInQueue.take();
-
                 if (message.getPayload() instanceof HeartbeatMessage hb) {
                     handleHeartbeat(hb);
                 } else if (message.getPayload() instanceof VoteRequestMessage vr) {
@@ -207,7 +200,7 @@ public class Replica {
         if (canVote) {
             votedFor = candidateId;
 
-            // IMPORTANT in Raft: reset election timeout when granting vote
+            //reset election timeout when granting vote
             resetElectionTimeout();
 
             communicationHandler.send(candidateId, new VoteResponseMessage(replicaID, currentTerm, true));
@@ -240,7 +233,6 @@ public class Replica {
         }
     }
 
-    /* ------------------------- Shutdown & getters ------------------------- */
 
     public void shutdown() {
         scheduler.shutdownNow();
