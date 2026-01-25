@@ -5,155 +5,249 @@ import uulm.in.vs.ex7.network.CommunicationHandler;
 import uulm.in.vs.ex7.network.MessageQueue;
 import uulm.in.vs.ex7.types.State;
 
-import java.util.Random;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class Replica {
     private final int replicaID;
     private final int numReplicas;
-    private int currentTerm=0;
 
-    private State currentState;
+    // Raft persistent-ish state (simplified)
+    private volatile int currentTerm = 0;
+    private volatile int votedFor = -1;          // candidateId voted for in currentTerm (-1 = none)
+
+    // Raft volatile state
+    private volatile State currentState = State.FOLLOWER;
+    private volatile int votesReceived = 0;
+
     private final MessageQueue messageInQueue;
     private final CommunicationHandler communicationHandler;
+
     private final ExecutorService executorService;
-    private final ScheduledExecutorService scheduler =
-            Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-    private volatile ScheduledFuture<?> heartbeatTimeoutFuture;
-    private volatile ScheduledFuture<?> sendTimeoutFuture;
-    private final long   heartbeat_timeout_delay=95;
-    private final long vote_delay=300;
-    private final long heartbeat_freq=90;
-    private volatile ScheduledFuture<?> voteTimeoutFuture;
-    private volatile int voted_for_me=0;
-    private volatile boolean votedThisTermAlready=false;
-    private volatile int active_leader=-1;
+    // Timers
+    private volatile ScheduledFuture<?> electionTimeoutFuture;
+    private volatile ScheduledFuture<?> heartbeatFuture;
 
+    // Timing (tune as needed)
+    private static final long HEARTBEAT_INTERVAL_MS = 50;      // leader sends heartbeats
+    private static final long ELECTION_TIMEOUT_MIN_MS = 200;   // follower/candidate election timeout range
+    private static final long ELECTION_TIMEOUT_MAX_MS = 400;
 
     public Replica(int replicaID, int numReplicas, CommunicationHandler communicationHandler) {
         this.replicaID = replicaID;
         this.numReplicas = numReplicas;
 
-        this.currentState = State.FOLLOWER;
         this.messageInQueue = new MessageQueue();
         this.communicationHandler = communicationHandler;
         this.communicationHandler.registerChannel(replicaID, messageInQueue);
 
         this.executorService = Executors.newFixedThreadPool(1);
         this.executorService.submit(this::processMessages);
-        resetHeartbeatTimeout();
+
+        resetElectionTimeout();
     }
-    private void sentHeartBeat(){
-        HeartbeatMessage hbm=new HeartbeatMessage(replicaID,currentTerm);
-        communicationHandler.broadcast(hbm);
+
+    /* ------------------------- Timers ------------------------- */
+
+    private long randomElectionTimeoutMs() {
+        return ThreadLocalRandom.current().nextLong(ELECTION_TIMEOUT_MIN_MS, ELECTION_TIMEOUT_MAX_MS + 1);
     }
-    private void resetHeartbeatTimeout() {
-        if (heartbeatTimeoutFuture != null && !heartbeatTimeoutFuture.isDone()) {
-            heartbeatTimeoutFuture.cancel(false);
+
+    private void resetElectionTimeout() {
+        if (electionTimeoutFuture != null && !electionTimeoutFuture.isDone()) {
+            electionTimeoutFuture.cancel(false);
         }
-        heartbeatTimeoutFuture = scheduler.schedule(
-                this::heartbeatTimeout,
-                heartbeat_timeout_delay,
+        electionTimeoutFuture = scheduler.schedule(
+                this::onElectionTimeout,
+                randomElectionTimeoutMs(),
                 TimeUnit.MILLISECONDS
         );
     }
-        private void resetVoteTimeout() {
-            if (voteTimeoutFuture != null && !voteTimeoutFuture.isDone()) {
-                voteTimeoutFuture.cancel(false);
-            }
-        voteTimeoutFuture= scheduler.schedule(
-                this::voteTimeout,
-                vote_delay,
-                TimeUnit.MILLISECONDS);
-    }
-    private void heartbeatTimeout(){
-        System.out.println("Heartbeat timeout triggered in process "+this.replicaID);
-        //init vote
-        if(currentState==State.FOLLOWER){
-            leaderElectionProcess();
+
+    private void cancelElectionTimeout() {
+        if (electionTimeoutFuture != null && !electionTimeoutFuture.isDone()) {
+            electionTimeoutFuture.cancel(false);
         }
     }
-    private void voteTimeout(){
-        System.out.println("Vote timeout triggered in process "+this.replicaID);
-        //stop vote
-        leaderElectionProcess();
+
+    private void startHeartbeats() {
+        stopHeartbeats();
+        heartbeatFuture = scheduler.scheduleAtFixedRate(
+                this::sendHeartbeat,
+                0,
+                HEARTBEAT_INTERVAL_MS,
+                TimeUnit.MILLISECONDS
+        );
     }
-    private void leaderElectionProcess(){
-        System.out.println("Started leader election, Candidate: "+replicaID);
-        voted_for_me=0;
-        votedThisTermAlready=false;
-        this.currentState=State.CANDIDATE;
-        this.currentTerm++;
-        VoteRequestMessage voteRequestMessage=new VoteRequestMessage(replicaID,currentTerm);
-        communicationHandler.broadcast(voteRequestMessage);
-        resetVoteTimeout();
+
+    private void stopHeartbeats() {
+        if (heartbeatFuture != null && !heartbeatFuture.isDone()) {
+            heartbeatFuture.cancel(false);
+        }
     }
+
+    /* ------------------------- Raft actions ------------------------- */
+
+    private void sendHeartbeat() {
+        if (currentState != State.LEADER) return;
+        communicationHandler.broadcast(new HeartbeatMessage(replicaID, currentTerm));
+    }
+
+    private void onElectionTimeout() {
+        // In Raft: followers and candidates start a new election when election timeout fires.
+        if (currentState == State.LEADER) return;
+
+        // Start new election (or new term if already candidate)
+        startElection();
+    }
+
+    private void startElection() {
+        // Become candidate, increment term, vote for self
+        currentState = State.CANDIDATE;
+        currentTerm++;
+        votedFor = replicaID;
+        votesReceived = 1; // self vote
+
+        System.out.println("Replica " + replicaID + " starts election for term " + currentTerm);
+
+        // Send vote requests
+        communicationHandler.broadcast(new VoteRequestMessage(replicaID, currentTerm));
+
+        // Reset election timeout so we can try again if split vote
+        resetElectionTimeout();
+    }
+
+    private void becomeFollower(int newTerm) {
+        // Step down and adopt term
+        currentState = State.FOLLOWER;
+        currentTerm = newTerm;
+        votedFor = -1;
+        votesReceived = 0;
+
+        stopHeartbeats();
+        resetElectionTimeout();
+    }
+
+    private void becomeLeader() {
+        currentState = State.LEADER;
+        cancelElectionTimeout();  // leader doesn’t use election timeout
+
+        System.out.println("Replica " + replicaID + " becomes LEADER for term " + currentTerm);
+
+        startHeartbeats();
+    }
+
+    /* ------------------------- Message processing ------------------------- */
 
     private void processMessages() {
         while (true) {
             try {
                 NetworkMessage message = messageInQueue.take();
-                if (message.getPayload() instanceof HeartbeatMessage heartbeat) {
-                    //reset timeout
-                    if(heartbeat.getCurrentTerm()>=currentTerm){
-                        if(currentState==State.LEADER){
-                            sendTimeoutFuture.cancel(false);
-                        }
-                        currentState=State.FOLLOWER;
-                        currentTerm=heartbeat.getCurrentTerm();
-                        resetHeartbeatTimeout();
-                    }
-                    if(currentState==State.FOLLOWER){
-                        resetHeartbeatTimeout();
-                    }
-                }else if(message.getPayload() instanceof VoteRequestMessage voteRequest){
-                    VoteResponseMessage voteResponse;
-                    if(voteRequest.getCurrentTerm()>=currentTerm&&!votedThisTermAlready){
-                        votedThisTermAlready=true;
-                        currentTerm=voteRequest.getCurrentTerm();
-                        voteResponse=new VoteResponseMessage(replicaID,currentTerm,true);
-                         active_leader=voteRequest.getSenderID();
-                    }else {
-                         voteResponse = new VoteResponseMessage(replicaID, currentTerm, false);
-                    }
-                    resetHeartbeatTimeout();
-                     communicationHandler.send(voteRequest.getSenderID(),voteResponse);
-                }else if(message.getPayload() instanceof VoteResponseMessage voteResponse){
-                    if(voteResponse.isVoteGranted()){
-                        voted_for_me++;
-                        System.out.println("Process "+replicaID+" got "+voted_for_me+" Votes");
 
-                    }
-                    if(voteResponse.getCurrentTerm()>=currentTerm){
-                        //transisition to Follower mode
-                        System.out.println("Process "+replicaID+" stopped vote process due to newer Term!");
-                        currentState=State.FOLLOWER;
-                        currentTerm=voteResponse.getCurrentTerm();
-                        resetHeartbeatTimeout();
-                    }
-                    if(voted_for_me>=numReplicas/2+1){
-                        System.out.println("Process "+replicaID+" is the new Leader!");
-                        sendTimeoutFuture =scheduler.scheduleAtFixedRate(this::sentHeartBeat, (long)((float)vote_delay*(1.0+(float)Math.random())),heartbeat_freq,TimeUnit.MILLISECONDS);
-
-                        currentState=State.LEADER;
-                    }
+                if (message.getPayload() instanceof HeartbeatMessage hb) {
+                    handleHeartbeat(hb);
+                } else if (message.getPayload() instanceof VoteRequestMessage vr) {
+                    handleVoteRequest(vr);
+                } else if (message.getPayload() instanceof VoteResponseMessage vresp) {
+                    handleVoteResponse(vresp);
                 }
+
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }
     }
 
+    private void handleHeartbeat(HeartbeatMessage hb) {
+        int term = hb.getCurrentTerm();
+
+        // If heartbeat term is newer -> step down
+        if (term > currentTerm) {
+            becomeFollower(term);
+            // after becomeFollower() election timeout is reset
+            return;
+        }
+
+        // If heartbeat term is older -> ignore
+        if (term < currentTerm) {
+            return;
+        }
+
+        // term == currentTerm: valid leader heartbeat
+        if (currentState != State.FOLLOWER) {
+            // Candidate or leader seeing a leader in same term -> become follower
+            currentState = State.FOLLOWER;
+            stopHeartbeats();
+        }
+
+        // Reset election timeout on valid heartbeat
+        resetElectionTimeout();
+    }
+
+    private void handleVoteRequest(VoteRequestMessage req) {
+        int term = req.getCurrentTerm();
+        int candidateId = req.getSenderID();
+
+        // If request term is newer, step down and update term first
+        if (term > currentTerm) {
+            becomeFollower(term);
+        }
+
+        // If request term is older, reject
+        if (term < currentTerm) {
+            communicationHandler.send(candidateId, new VoteResponseMessage(replicaID, currentTerm, false));
+            return;
+        }
+
+        // term == currentTerm: grant vote if haven't voted or already voted for same candidate
+        boolean canVote = (votedFor == -1 || votedFor == candidateId);
+
+        if (canVote) {
+            votedFor = candidateId;
+
+            // IMPORTANT in Raft: reset election timeout when granting vote
+            resetElectionTimeout();
+
+            communicationHandler.send(candidateId, new VoteResponseMessage(replicaID, currentTerm, true));
+        } else {
+            communicationHandler.send(candidateId, new VoteResponseMessage(replicaID, currentTerm, false));
+        }
+    }
+
+    private void handleVoteResponse(VoteResponseMessage resp) {
+        int term = resp.getCurrentTerm();
+
+        // If response has newer term -> step down
+        if (term > currentTerm) {
+            becomeFollower(term);
+            return;
+        }
+
+        // Ignore responses for old terms or if not a candidate
+        if (term < currentTerm || currentState != State.CANDIDATE) {
+            return;
+        }
+
+        if (resp.isVoteGranted()) {
+            votesReceived++;
+            System.out.println("Replica " + replicaID + " got " + votesReceived + " votes in term " + currentTerm);
+
+            if (votesReceived >= (numReplicas / 2 + 1)) {
+                becomeLeader();
+            }
+        }
+    }
+
+    /* ------------------------- Shutdown & getters ------------------------- */
+
     public void shutdown() {
-        scheduler.shutdown();
-        this.executorService.shutdownNow();
+        scheduler.shutdownNow();
+        executorService.shutdownNow();
     }
 
     public State getCurrentState() {
-        return this.currentState;
+        return currentState;
     }
-
 }
