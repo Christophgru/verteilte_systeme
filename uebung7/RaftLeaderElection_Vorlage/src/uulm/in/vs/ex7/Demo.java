@@ -5,7 +5,7 @@ import uulm.in.vs.ex7.types.State;
 
 public class Demo {
     public static void main(String[] args) throws InterruptedException {
-        int numReplicas = 3;
+        int numReplicas = 7;
         Replica[] replicas = new Replica[numReplicas];
 
         CommunicationHandler communicationHandler = new CommunicationHandler(numReplicas, 30);
